@@ -1,0 +1,104 @@
+---
+title: |
+ | \vspace{5cm} Evaluación Técnica
+subtitle: |
+ Encuesta de Microemprendimiento (EME)
+author: | 
+ | 
+ | \vspace{6cm} Valentina Andrade
+date: "`r Sys.Date()`"
+header-includes:
+- \usepackage{titling}
+- \pretitle{\begin{center}\LARGE\includegraphics[width=3cm]{Input/Imagenes/logo_ine.png}\\[\bigskipamount]}
+- \posttitle{\end{center}}
+- \usepackage[fontsize=12pt]{scrextend}
+- \usepackage{floatrow}
+- \usepackage{multicol}
+- \floatsetup[figure]{capposition=top}
+- \floatsetup[table]{capposition=top}
+- \floatplacement{figure}{H}
+- \floatplacement{table}{h}
+
+output: 
+  bookdown::pdf_document2:
+    toc: no
+    highlight: tango
+    number_sections: TRUE
+    pandoc_args: !expr rmdfiltr::add_wordcount_filter()
+bibliography: Input/Bib/bib.bib
+linkcolor: black
+urlcolor: blue
+link-citations: yes
+csl: Input/Bib/apa.csl
+---
+
+
+\newpage
+
+\setcounter{tocdepth}{2}
+\renewcommand{\contentsname}{Tabla de contenidos}
+\tableofcontents
+
+\newpage
+
+# Introducción
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment=NA, prompt=FALSE, cache=FALSE, echo=TRUE, results='asis', message = F, warning = F)
+summarytools::st_options(bootstrap.css     = FALSE,
+           plain.ascii       = FALSE,   
+           style             = "rmarkdown",
+           dfSummary.silent  = TRUE, 
+           footnote          = NA,
+           subtitle.emphasis = FALSE,
+           headings =  F,
+           lang =  "es")
+summarytools::st_css()
+library(ggplot2); library(sjPlot)
+theme_set(theme_sjplot2())
+options(knitr.kable.NA = 'No sabe/No responde', kableExtra.auto_format = FALSE)
+```
+
+
+
+```{r load, echo = F}
+# 1. Cargar librarias
+pacman::p_load(haven,tidyverse, sjPlot, summarytools,
+               magrittr, ggmosaic, texreg, kableExtra,
+               ggeffects)
+
+# 2. Scrapp base de datos
+data <- haven::read_dta("input/data/Base de datos Full VI EME.dta")
+
+```
+
+
+
+\newpage
+
+# Presentación
+
+El siguiente documento corresponde al análisis realizado para el  concurso de Analista socioeconómico del Subdepartamento de Estadísticas Socioeconómicas para la Encuesta de Microemprendimiento del Instituto Nacional de Estadísticas. Para ello se utilizaron las bases de datos del año, que es una encuesta a hogares en donde reside un dueño de microemprendimiento (formales e informales)
+
+La encuesta tiene como objetivo principal realizar una caracterización profunda de los microemprendimientos que se desarrollan a nivel nacional, permitiendo conocer las limitantes y los elementos facilitadores que tienen las unidades económicas de menor tamaño para llevar a cabo sus actividades.
+
+\newpage
+
+# Desarrollo
+
+\newpage
+
+# Conclusiones
+
+
+\newpage
+
+# Bibliografía
+
+
+
+
+
+
+
+
+
