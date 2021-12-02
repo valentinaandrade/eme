@@ -43,7 +43,7 @@ csl: Input/Bib/apa.csl
 
 # Introducción
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(comment=NA, prompt=FALSE, cache=FALSE, echo=TRUE, results='asis', message = F, warning = F)
+knitr::opts_chunk$set(comment=NA, prompt=FALSE, cache=FALSE, echo=TRUE, results='asis', message = F, warning = F, eval = F)
 summarytools::st_options(bootstrap.css     = FALSE,
            plain.ascii       = FALSE,   
            style             = "rmarkdown",
@@ -77,27 +77,149 @@ data <- haven::read_dta("input/data/Base de datos Full VI EME.dta")
 
 # Presentación
 
-El siguiente documento corresponde al análisis realizado para el  concurso de Analista socioeconómico del Subdepartamento de Estadísticas Socioeconómicas para la Encuesta de Microemprendimiento del Instituto Nacional de Estadísticas. Para ello se utilizaron las bases de datos del año, que es una encuesta a hogares en donde reside un dueño de microemprendimiento (formales e informales)
+El siguiente documento corresponde al análisis realizado para el  concurso de Analista socioeconómico del Subdepartamento de Estadísticas Socioeconómicas para la Encuesta de Microemprendimiento del Instituto Nacional de Estadísticas. Para ello se utilizaron las bases de datos EME y ENE informantes, que es una encuesta a hogares en donde reside un dueño de microemprendimiento (formales e informales)
 
 La encuesta tiene como objetivo principal realizar una caracterización profunda de los microemprendimientos que se desarrollan a nivel nacional, permitiendo conocer las limitantes y los elementos facilitadores que tienen las unidades económicas de menor tamaño para llevar a cabo sus actividades.
 
 \newpage
 
-# Desarrollo
+# Códigos
+```{r}
+# 1.Cargar librerias ------------------------------------------------------
+pacman::p_load(tidyverse, sjmisc, #manipulacion
+               srvyr, survey) # Muestras
+# 2.Cargar bases de datos -------------------------------------------------
+## Se utilio EME-2018-personas (https://www.ine.cl/estadisticas/sociales/ingresos-y-gastos/encuesta-suplementaria-de-ingresos)
+
+data <- haven::read_dta("input/data/Base de datos Full VI EME (extracto).dta")
+data2 <- haven::read_dta("input/data/Base de datos empleo VI EME.dta")
+```
+
+## Parte I
+
+```{r}
+# 4.2 Recodificar ---------------------------------------------------------
+sjmisc::frq(data$region)
+# Personas microemprendedoras
+sjmisc::frq(data$a1)
+
+# Recodificar regiones
+data_proc <- data %>% mutate(macrozona = case_when(region %in% c(15, 1, 2, 3) ~ "Norte",
+                                           region %in% c(4, 5, 6, 7, 16, 8) ~ "Centro",
+                                           region %in% c(9, 14, 10) ~ "Sur",
+                                           region %in% c(11, 12) ~ "Austral",
+                                           TRUE ~ NA_character_),
+                                  micro = case_when(a1 %in% c(1,2) ~ "Microemprendedor",
+                                                                 TRUE ~ NA_character_),
+                              micro_informal = if_else(registro_SII == 2 & conta_completa == 2, "Informal","Formal")) %>% 
+  mutate_at(vars(macrozona, micro, micro_informal, CISE), funs(forcats::as_factor(.))) %>% 
+  mutate_at(vars(macrozona, micro, micro_informal, CISE), funs(as.character(.)))
+
+
+# 5.Expandir --------------------------------------------------------------
+# 5.1.Expandir
+## En base a metodologia EME se identifica un diseno muestral complejo (bietapidoc por conglomerados)
+exp <- data_proc %>%
+  as_survey_design(ids = Enc_rph, weights = Factor_EME)
+### Nuevo objeto exp
+
+## 5.2 Definir diseño muestral
+options(survey.lonely.psu = "certainty" )
+
+
+# 6. Tablas  -------------------------------------------------------------
+# Tasa informalidad (con factores)
+# Ganancia promedio mensual empleadores (ganancia final mensual grupo 1)
+# Ganancia promedio mensual de trabajadores cuenta propia (ganancia final mensual 0)
+
+# 6.1 Numero de personas microemprendedoras por zona
+exp  %>%
+  filter(micro == "Microemprendedor") %>% 
+  group_by(macrozona) %>% 
+  summarise(n=survey_total(vartype = "ci",na.rm = TRUE))
+
+# 6.1 Numero de personas microemprendedoras por zona
+exp  %>%
+  filter(micro == "Microemprendedor", !is.na(macrozona)) %>% 
+  group_by(macrozona, micro_informal) %>%
+  summarise(n=survey_total(vartype = "ci",na.rm = TRUE)) %>%
+  mutate(tasa = n /2057903) %>%  # Total de microemprendedores
+  filter(micro_informal == "Informal") %>% 
+  select(macrozona, n, tasa)
+# 6.3 Ganancia promedio mensual empleadores y cuenta propia
+exp %>% 
+  group_by(CISE, macrozona) %>% 
+  summarise(ganancia_promedio=survey_mean(ganancia_final_mensual,vartype = "ci",na.rm = TRUE))
+
+```
+
+## Parte 2
+```{r}
+# Filtrar sin datos o no responde (se dejan no sabe) -----------------------------------------------------------------------
+data_proc2 <- data2 %>% filter(!f2_b %in% c(96,99), !f2_c %in% c(96,99), !f2_d %in% c(999), !f2_e %in% c(96,99), !f2_f %in% c(96,99),
+                               !f2_g %in% c(96,99), !f2_i %in% c(996,999))
+
+# 3. Generar variables ----------------------------------------------------
+
+# 3.1 Numero de trabajadores totales --------------------------------------
+#
+data_proc2 <- data_proc2 %>% 
+  group_by(Enc_rph) %>% 
+  mutate(f2_totales = n(),
+         sex = forcats::as_factor(f2_c),
+         asalariado = forcats::as_factor(f2_f)) %>% 
+  group_by(Enc_rph,sex) %>%
+  mutate(f2_ = n()) %>%
+  pivot_wider(names_from = c(sex), values_from = c(f2_)) %>% 
+  ungroup() %>% 
+  group_by(Enc_rph, asalariado) %>% 
+  mutate(f2_ = n(),
+         gasto_remun_asal = mean(f2_h, na.omit = T)) %>% 
+  pivot_wider(names_from = c(asalariado), values_from = c(f2_)) %>% 
+  select(1,f2_mujeres = Mujer, f2_hombres = Hombre, f2_asalariados = 16, gasto_remun_asal) %>% 
+  ungroup()
+
+# 4. Fusionar ----------------------------------------------------------------
+#Fusion completa
+data_final <- merge(data, data_proc2, all = T, by = "Enc_rph")  
+#Fusion como ENE de referencia dado que es mejor registro
+data_final <- right_join(data, data_proc2, by = "Enc_rph")  
+
+```
+
+## Parte 3
+```{r}
+validacion <- 
+  data_final %>% mutate(error_1=if_else(is.na(a2_otro),1,0), #Validacion de falta de respuesta
+                        error_2=if_else((a3==1|a3==2)&(a1<3),1,0), # No respuesta
+                        error_3=if_else(a4>4 & a4 < 77,1,0)) # Fuera de rango
+```
 
 \newpage
 
-# Conclusiones
+# Gráfico de brechas de ingreso
+
+El gráfico de las brechas de ingreso mediano permite mostrar cuatro puntos relevantes
+
+Primero, el ingreso mediano de los hombres es significativamente mayor que el ingreso mediano de las mujeres en las cuatro ramas de actividad económica visualizadas. Esto quiere decir que al menos un 50% de los hombres recibe más que las mujeres, y esta estimación puntual es estadísticamente significativa segpun los intervalos de confianza.
+
+Segundo, la mayor brecha o diferencia de ingresos entre los dos géneros se da en la rama de la industria manufacturera, donde la brecha llega a -72,8% (más del 10% que en los otros tres sectores). Este valor es esperable considerando que este sector es uno de los tradicionalmente más masculinizados dentro y entre los sectores económicos (ENE, 2021). Si bien la brecha de participación laboral en esta fuerza de trabajoha disminuido, esta sigue siendo masculinizada, y su segregación vertical y horizontal en el mercado laboral persistentes.
+
+Cuarto, los ingresos de cada género son estadísticamente diferentes. Esto es relevante pues estimaciones recientes de la International Labor Office (en un informe Panorama Laboral) muestran que una de ls mejores estimaciones de ingresos son la mediana, sobre todo para comparaciones por compisición de sexo. Es importante notar, además, que la medición de la tabla no especifica qué tipo de ingresos son, por lo que no se puede inferir si estos corresponden a ingresos provenientes del salario u otros. 
+
+Por último,  los ingresos de cada género son estadísticamente diferentes entre las distintas ramas de actividad económica, siendo que el sector de los servicios donde el ingreso mediano de hombres y muejres alcanza los valores más altos: $500.000 para los hombres y $200.000 para las mujeres. Por el otro lado, en el sector primario es donde ls ingresos medianos son más bajos: $168.000 para los hombres y $68.000 para las mujeres. Estas cifras hablan de ingresos bajísimo que probablemente reflejen la prevalencia de contratos a tiempo parcial, en tanto la mitad de los hombres ganaría $168.000 pesos o menos y la mitad de las mujerss $68.000 o menos. Ambos valores se encuentran muy por debajo del ingreso mínimo mensual que regía en 2019 ($301.000)
+
 
 
 \newpage
 
 # Bibliografía
 
+Encuesta de Microemprendimiento (2019) Instituto Nacional de Estadísticas
 
+Panorama Laboral (2019) International Labour Office, OIT
 
-
-
+Encuesta Nacional de Empleo (2021) Instituto Nacional de Estadística
 
 
 
